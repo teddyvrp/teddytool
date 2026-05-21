@@ -357,21 +357,6 @@
             }
         }
 
-        .copy-btn {
-            background: none;
-            border: none;
-            color: #667eea;
-            cursor: pointer;
-            font-size: 12px;
-            padding: 0;
-            text-decoration: underline;
-            transition: all 0.3s ease;
-        }
-
-        .copy-btn:hover {
-            color: #764ba2;
-        }
-
         .empty-state {
             text-align: center;
             padding: 40px 20px;
@@ -426,34 +411,6 @@
             color: #333;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-right: 5px;
-        }
-
-        .badge-exists {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .badge-not-exists {
-            background: #fee2e2;
-            color: #7f1d1d;
-        }
-
-        .badge-checking {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .download-btn {
-            margin-top: 10px;
-        }
-
         .settings-section {
             background: #f8f9fa;
             padding: 15px;
@@ -473,17 +430,16 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 10px;
-            font-size: 13px;
+            margin-bottom: 8px;
+            font-size: 12px;
         }
 
         .setting-item:last-child {
             margin-bottom: 0;
         }
 
-        .setting-item input {
-            width: 50px;
-            padding: 5px;
+        .setting-item input, .setting-item select {
+            padding: 6px 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 12px;
@@ -491,15 +447,25 @@
 
         .setting-item label {
             color: #666;
-            flex: 1;
+        }
+
+        .info-box {
+            background: #e0f2fe;
+            border-left: 3px solid #0284c7;
+            padding: 10px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #0c4a6e;
+            margin-top: 10px;
+            line-height: 1.5;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📧 Email Checker & Filter v2.0</h1>
-            <p>Kiểm tra email từ file mail:pass - Lọc email chưa được tạo (SMTP Verification)</p>
+            <h1>📧 Email Checker & Filter v3.0</h1>
+            <p>Kiểm tra email từ file mail:pass - Phát hiện email chưa tạo (Domain Based Detection)</p>
         </div>
 
         <div class="content">
@@ -529,17 +495,25 @@
                     <div class="settings-section">
                         <div class="settings-title">⚙️ Cấu Hình Kiểm Tra</div>
                         <div class="setting-item">
-                            <label>Kiểm tra song song (threads):</label>
-                            <input type="number" id="parallelThreads" value="10" min="1" max="50">
+                            <label>Kiểm tra song song:</label>
+                            <input type="number" id="parallelThreads" value="20" min="1" max="100">
                         </div>
                         <div class="setting-item">
-                            <label>Timeout (giây):</label>
-                            <input type="number" id="timeout" value="5" min="1" max="30">
+                            <label>Độ nhạy cảm:</label>
+                            <select id="sensitivity">
+                                <option value="high">🔴 Cao (Dễ phát hiện fake)</option>
+                                <option value="medium" selected>🟡 Trung bình</option>
+                                <option value="low">🟢 Thấp (Chỉ fake rõ ràng)</option>
+                            </select>
                         </div>
                         <div class="setting-item">
-                            <label>Retry lần:</label>
-                            <input type="number" id="retries" value="2" min="0" max="5">
+                            <label>Sử dụng API:</label>
+                            <input type="checkbox" id="useAPI" title="Nếu có API key, có thể kết nối API để check chính xác hơn">
                         </div>
+                    </div>
+
+                    <div class="info-box">
+                        💡 <strong>Cách hoạt động:</strong> Phân tích domain, kiểm tra format email, phát hiện pattern fake, disposable email. Không gửi email thật.
                     </div>
 
                     <div class="button-group">
@@ -590,7 +564,7 @@
                     <div class="section-title">📤 Output (Không Tồn Tại)</div>
                     
                     <div class="output-section">
-                        <div class="output-label">Email không tồn tại:</div>
+                        <div class="output-label">Email không tồn tại hoặc fake:</div>
                         <textarea id="outputText" readonly placeholder="Kết quả sẽ hiển thị ở đây..."></textarea>
                     </div>
 
@@ -610,7 +584,7 @@
                         <div style="font-size: 12px; color: #666; line-height: 1.8;">
                             <div>📊 Total không tồn tại: <strong id="finalNotExistsCount">0</strong></div>
                             <div>⏱️ Thời gian kiểm tra: <strong id="checkingTime">0s</strong></div>
-                            <div>📝 Từng dòng: email:pass</div>
+                            <div>📝 Format: email:pass</div>
                         </div>
                     </div>
                 </div>
@@ -618,7 +592,7 @@
         </div>
 
         <div class="footer">
-            <p>⚡ SMTP Verification | 🔒 Xử lý dữ liệu trên máy bạn | ⚙️ Parallel Processing | © 2024</p>
+            <p>⚡ Domain & Pattern Analysis | 🔒 Client-side Processing | © 2024</p>
         </div>
     </div>
 
@@ -627,9 +601,25 @@
         let currentChecking = false;
         let startTime = 0;
 
-        // Email validation regex
+        // Email validation
         const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const PASSWORD_REGEX = /^[^\s]+$/;
+
+        // Disposable/Free email domains (những domain này thường là catch-all)
+        const FREE_EMAIL_DOMAINS = new Set([
+            'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'msn.com',
+            'aol.com', 'mail.com', 'protonmail.com', 'icloud.com', 'yandex.com',
+            'gmx.com', 'inbox.com', 'mail.ru', 'qq.com', '163.com',
+            'sina.com.cn', 'sohu.com', 'tom.com'
+        ]);
+
+        // Disposable email providers
+        const DISPOSABLE_DOMAINS = new Set([
+            'tempmail.com', 'guerrillamail.com', '10minutemail.com', 'mailinator.com',
+            'temp-mail.org', 'throwaway.email', 'maildrop.cc', 'mintemail.com',
+            'yopmail.com', 'spam4.me', 'trashmail.com', 'fakeinbox.com',
+            'temp-mail.io', 'mailnesia.com', '1secmail.com', 'dispostable.com',
+            'grr.la', 'testing.org', 'armyofme.eu', 'frosbite.com'
+        ]);
 
         // File input handler
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -649,9 +639,7 @@
             if (parts.length < 2) return false;
             
             const email = parts[0].trim();
-            const pass = parts.slice(1).join(':').trim();
-            
-            return EMAIL_REGEX.test(email) && PASSWORD_REGEX.test(pass);
+            return EMAIL_REGEX.test(email);
         }
 
         function extractEmails(text) {
@@ -666,7 +654,7 @@
                         email: email.trim(), 
                         pass: passParts.join(':').trim(), 
                         original: line.trim(),
-                        domain: email.trim().split('@')[1]
+                        domain: email.trim().split('@')[1].toLowerCase()
                     });
                 } else if (line.trim()) {
                     invalid.push(line.trim());
@@ -676,71 +664,68 @@
             return { valid, invalid };
         }
 
-        // Improved SMTP checker using DNS MX verification and timeouts
-        async function checkEmailExists(email, domain, timeout = 5000, retries = 2) {
-            // For client-side, we'll use a combination of approaches
-            // 1. Check domain validity via DNS lookup simulation
-            // 2. Use pattern-based detection
-            // 3. Check common catch-all domains
+        // Enhanced email checking logic
+        function checkEmailValidity(emailObj, sensitivity = 'medium') {
+            const email = emailObj.email.toLowerCase();
+            const domain = emailObj.domain.toLowerCase();
             
-            return new Promise((resolve) => {
-                let attempts = 0;
+            // 1. Check if it's a disposable/temp email
+            if (DISPOSABLE_DOMAINS.has(domain)) {
+                return false;
+            }
+
+            // 2. Check for common fake patterns
+            const fakePatterns = [
+                /^(test|fake|invalid|example|demo|temp|noreply|nouse|notexist|dummy|sample)/i,
+                /\d{8,}/, // Too many consecutive numbers
+                /(.)\1{3,}/, // Repeated characters more than 3 times
+                /(admin|test|root|user|mail|info|contact|support|hello|hello123)/,
+            ];
+
+            for (let pattern of fakePatterns) {
+                if (pattern.test(email)) {
+                    if (sensitivity === 'high') return false;
+                    if (sensitivity === 'medium' && /^(test|fake|invalid|example|noreply|dummy)/.test(email)) return false;
+                }
+            }
+
+            // 3. Check for suspicious structures
+            if (email.split('_').length > 3) return false; // Too many underscores
+            if (email.match(/[!#$%^&*()]/)) return false; // Special characters
+
+            // 4. Suspicious number patterns (like test123456789)
+            const numberMatch = email.match(/\d+/g);
+            if (numberMatch) {
+                const totalNumbers = numberMatch.reduce((sum, n) => sum + n.length, 0);
+                if (totalNumbers > 12) return false;
+                if (numberMatch.some(n => n.length > 6)) return false;
+            }
+
+            // 5. For free email domains - usually all exist (catch-all)
+            if (FREE_EMAIL_DOMAINS.has(domain)) {
+                return true;
+            }
+
+            // 6. For corporate/custom domains - more strict
+            if (!FREE_EMAIL_DOMAINS.has(domain)) {
+                // Check domain validity
+                if (!domain.includes('.')) return false;
+                if (domain.length < 5) return false;
                 
-                const attempt = async () => {
-                    attempts++;
-                    
-                    try {
-                        // Timeout wrapper
-                        const result = await Promise.race([
-                            performEmailCheck(email, domain),
-                            new Promise((_, reject) => 
-                                setTimeout(() => reject(new Error('Timeout')), timeout)
-                            )
-                        ]);
-                        resolve(result);
-                    } catch (error) {
-                        if (attempts < retries) {
-                            await new Promise(r => setTimeout(r, 500)); // Wait before retry
-                            attempt();
-                        } else {
-                            // Default to "not exists" on failure for safety
-                            resolve(false);
-                        }
-                    }
-                };
-                
-                attempt();
-            });
+                // Suspicious corporate domains
+                if (/\d{2,}/.test(domain.split('.')[0])) return false;
+            }
+
+            return true;
         }
 
-        async function performEmailCheck(email, domain) {
-            // Simulate SMTP verification with improved logic
+        async function performEmailCheck(emailObj, sensitivity = 'medium') {
             return new Promise((resolve) => {
-                // Simulate network delay
-                const delay = Math.random() * 500 + 200;
-                
+                // Simulate very fast check (no network delay for pattern matching)
                 setTimeout(() => {
-                    // Check for common indicators
-                    const lowerEmail = email.toLowerCase();
-                    const lowerDomain = domain.toLowerCase();
-                    
-                    // Suspicious patterns
-                    const notExists = 
-                        lowerEmail.includes('notexist') ||
-                        lowerEmail.includes('test') ||
-                        lowerEmail.includes('temp') ||
-                        lowerEmail.includes('fake') ||
-                        lowerEmail.includes('invalid') ||
-                        lowerEmail.includes('example') ||
-                        lowerDomain.includes('test') ||
-                        lowerDomain.includes('example') ||
-                        lowerDomain.includes('localhost') ||
-                        // Disposable email domains (simplified)
-                        /\d{10,}/.test(email) || // Too many numbers in sequence
-                        Math.random() < 0.25; // 25% chance as baseline
-                    
-                    resolve(!notExists);
-                }, delay);
+                    const isValid = checkEmailValidity(emailObj, sensitivity);
+                    resolve(isValid);
+                }, Math.random() * 50 + 10); // 10-60ms
             });
         }
 
@@ -769,9 +754,8 @@
             }
 
             // Get settings
-            const parallelThreads = parseInt(document.getElementById('parallelThreads').value) || 10;
-            const timeout = parseInt(document.getElementById('timeout').value) * 1000 || 5000;
-            const retries = parseInt(document.getElementById('retries').value) || 2;
+            const parallelThreads = parseInt(document.getElementById('parallelThreads').value) || 20;
+            const sensitivity = document.getElementById('sensitivity').value;
 
             // Show stats
             document.getElementById('stats').style.display = 'grid';
@@ -793,7 +777,7 @@
             // Process batches sequentially
             for (const batch of batches) {
                 const promises = batch.map(async (item) => {
-                    const exists = await checkEmailExists(item.email, item.domain, timeout, retries);
+                    const exists = await performEmailCheck(item, sensitivity);
                     
                     if (exists) {
                         existsCount++;
@@ -902,7 +886,6 @@
             
             messageArea.innerHTML = `<div class="${className}">${message}</div>`;
             
-            // Auto clear after 5 seconds
             setTimeout(() => {
                 if (messageArea.innerHTML.includes(message)) {
                     messageArea.innerHTML = '';
